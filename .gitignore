@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.DS_Store
+*.tsbuildinfo
+
+# Local secrets
+.env
+.env.*
+!.env.example
+!.env.local.example
+supabase/.env
+supabase/.env.*
+!supabase/.env.example
+frontend/.env.local
+
+# Supabase local runtime
+supabase/.branches/
+supabase/.temp/

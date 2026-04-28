@@ -65,7 +65,7 @@ export async function generateAnnotatedImage(
   const response = await postGenerateContent({
     apiKey: request.apiKey,
     model: request.model,
-    timeoutMs: request.timeoutMs ?? 120_000,
+    timeoutMs: request.timeoutMs ?? 28_000,
     body: {
       contents: [{
         role: "user",
@@ -111,7 +111,7 @@ async function generateJson<T>(request: JsonRequest<T>): Promise<T> {
   const response = await postGenerateContent({
     apiKey: request.apiKey,
     model: request.model,
-    timeoutMs: request.timeoutMs ?? 90_000,
+    timeoutMs: request.timeoutMs ?? 18_000,
     body: {
       contents: [{
         role: "user",

@@ -20,7 +20,8 @@ import type {
   GeminiOpeningsResult,
 } from "./types.ts";
 
-const STREAM_HEARTBEAT_MS = 10_000;
+const STREAM_HEARTBEAT_MS = 8_000;
+const ANALYSIS_TIMEOUT_MS = 35_000;
 
 export async function handleRequest(request: Request): Promise<Response> {
   const corsHeaders = buildCorsHeaders(request);
@@ -78,15 +79,34 @@ export async function handleRequest(request: Request): Promise<Response> {
     void writeChunk(": keep-alive\n\n").catch(() => {});
   }, STREAM_HEARTBEAT_MS);
 
+  let analysisFinished = false;
+
+  const safetyTimerId = setTimeout(async () => {
+    if (analysisFinished) return;
+    console.error("[analyze-floorplan] safety timeout fired after", ANALYSIS_TIMEOUT_MS, "ms");
+    await emit({
+      type: "error",
+      error:
+        "Analysis timed out after 35 seconds. Please retry — or switch to Normal mode / use a smaller image if this keeps happening.",
+    }).catch(() => {});
+    clearInterval(heartbeatId);
+    await writer.close().catch(() => {});
+  }, ANALYSIS_TIMEOUT_MS);
+
   (async () => {
     try {
+      console.log("[analyze-floorplan] starting analysis, mode:", normalizedRequest.mode);
       await runAnalysis(apiKey, normalizedRequest, emit);
+      console.log("[analyze-floorplan] analysis complete");
     } catch (error) {
       const message = error instanceof Error
         ? error.message
         : "Unknown floor plan analysis error.";
+      console.error("[analyze-floorplan] runAnalysis error:", message, error instanceof Error ? error.stack : "");
       await emit({ type: "error", error: message }).catch(() => {});
     } finally {
+      analysisFinished = true;
+      clearTimeout(safetyTimerId);
       clearInterval(heartbeatId);
       await writer.close().catch(() => {});
     }

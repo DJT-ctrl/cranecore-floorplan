@@ -107,11 +107,16 @@ export async function analyzeFloorPlanStream(
         continue;
       }
 
+      console.log("[analyze-floorplan]", event.type, event);
       if (event.type === "error") throw new Error(event.error);
       if (event.type === "complete") return event.result;
       onProgress(event);
     }
   }
 
-  throw new Error("Stream ended without a result.");
+  throw new Error(
+    "Analysis stream closed before a result was received. " +
+    "Open the browser console (F12 → Console) to see the last events that arrived, " +
+    "then retry. If this keeps happening, switch to Normal mode or use a smaller image."
+  );
 }

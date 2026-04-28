@@ -20,19 +20,7 @@ import type {
   GeminiOpeningsResult,
 } from "./types.ts";
 
-const RATE_LIMIT_MAX = Number(Deno.env.get("RATE_LIMIT_MAX") ?? "10");
-const RATE_LIMIT_WINDOW_MS =
-  Number(Deno.env.get("RATE_LIMIT_WINDOW_MINUTES") ?? "60") * 60 * 1000;
 const STREAM_HEARTBEAT_MS = 10_000;
-
-const kvPromise: Promise<Deno.Kv | null> = (async () => {
-  try {
-    return await Deno.openKv();
-  } catch (_error) {
-    return null;
-  }
-})();
-const memoryRateStore = new Map<string, number[]>();
 
 export async function handleRequest(request: Request): Promise<Response> {
   const corsHeaders = buildCorsHeaders(request);
@@ -57,28 +45,6 @@ export async function handleRequest(request: Request): Promise<Response> {
   const auth = authorizeRequest(request);
   if (!auth.ok) {
     return json({ error: auth.error }, auth.status, corsHeaders);
-  }
-
-  const rate = await checkRateLimit(auth.identity);
-  const rateHeaders: Record<string, string> = {
-    "X-RateLimit-Limit": String(RATE_LIMIT_MAX),
-    "X-RateLimit-Remaining": String(Math.max(0, rate.remaining)),
-  };
-  if (!rate.allowed) {
-    return json(
-      {
-        error:
-          `Rate limit exceeded. Max ${RATE_LIMIT_MAX} requests per ${
-            RATE_LIMIT_WINDOW_MS / 60000
-          } minutes.`,
-      },
-      429,
-      {
-        ...corsHeaders,
-        ...rateHeaders,
-        "Retry-After": String(Math.ceil(rate.retryAfterMs / 1000)),
-      },
-    );
   }
 
   let normalizedRequest: AnalyzeFloorPlanRequest;
@@ -129,7 +95,6 @@ export async function handleRequest(request: Request): Promise<Response> {
   return new Response(readable, {
     headers: {
       ...(corsHeaders as Record<string, string>),
-      ...rateHeaders,
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       "Connection": "keep-alive",
@@ -172,60 +137,6 @@ function clientIp(request: Request): string {
   const real = request.headers.get("x-real-ip");
   if (real) return real.trim();
   return "unknown";
-}
-
-interface RateLimitDecision {
-  allowed: boolean;
-  remaining: number;
-  retryAfterMs: number;
-}
-
-async function checkRateLimit(identity: string): Promise<RateLimitDecision> {
-  const now = Date.now();
-  const windowStart = now - RATE_LIMIT_WINDOW_MS;
-  const kv = await kvPromise;
-
-  if (kv) {
-    const key = ["ratelimit", identity];
-    const entry = await kv.get<number[]>(key);
-    const previous = entry.value ?? [];
-    const recent = previous.filter((ts) => ts > windowStart);
-    if (recent.length >= RATE_LIMIT_MAX) {
-      const oldest = recent[0];
-      return {
-        allowed: false,
-        remaining: 0,
-        retryAfterMs: Math.max(1000, oldest + RATE_LIMIT_WINDOW_MS - now),
-      };
-    }
-    recent.push(now);
-    await kv.set(key, recent, {
-      expireIn: RATE_LIMIT_WINDOW_MS + 60_000,
-    });
-    return {
-      allowed: true,
-      remaining: RATE_LIMIT_MAX - recent.length,
-      retryAfterMs: 0,
-    };
-  }
-
-  const previous = memoryRateStore.get(identity) ?? [];
-  const recent = previous.filter((ts) => ts > windowStart);
-  if (recent.length >= RATE_LIMIT_MAX) {
-    const oldest = recent[0];
-    return {
-      allowed: false,
-      remaining: 0,
-      retryAfterMs: Math.max(1000, oldest + RATE_LIMIT_WINDOW_MS - now),
-    };
-  }
-  recent.push(now);
-  memoryRateStore.set(identity, recent);
-  return {
-    allowed: true,
-    remaining: RATE_LIMIT_MAX - recent.length,
-    retryAfterMs: 0,
-  };
 }
 
 async function runAnalysis(
@@ -445,8 +356,6 @@ function buildCorsHeaders(request: Request): HeadersInit {
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, x-api-key, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Expose-Headers":
-      "X-RateLimit-Limit, X-RateLimit-Remaining, Retry-After",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };

@@ -52,12 +52,21 @@ export async function analyzeFloorPlanStream(
 
   if (!response.ok || !response.body) {
     const bodyText = await response.text().catch(() => "");
+    const contentType = response.headers.get("content-type") ?? "";
     let errorMessage: string;
     try {
       const payload = JSON.parse(bodyText) as { error?: string };
       errorMessage = payload.error ?? `Server returned ${response.status}`;
     } catch {
-      errorMessage = `Server returned ${response.status}: ${bodyText.slice(0, 300)}`;
+      if (response.status === 404 && contentType.includes("text/html")) {
+        errorMessage =
+          `Request to ${analyzeUrl} returned Netlify's 404 page. ` +
+          `That usually means this deploy URL does not have the edge function route active yet, ` +
+          `or VITE_ANALYZE_FUNCTION_URL points at the wrong site/domain.`;
+      } else {
+        errorMessage =
+          `Request to ${analyzeUrl} returned ${response.status}: ${bodyText.slice(0, 300)}`;
+      }
     }
     throw new Error(errorMessage);
   }

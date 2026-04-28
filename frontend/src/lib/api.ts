@@ -76,7 +76,19 @@ export async function analyzeFloorPlanStream(
   let buffer = "";
 
   while (true) {
-    const { done, value } = await reader.read();
+    let done: boolean;
+    let value: Uint8Array | undefined;
+    try {
+      ({ done, value } = await reader.read());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        message === "Load failed"
+          ? `Connection to ${analyzeUrl} dropped while analysis was still running. Please retry. If this keeps happening, switch to Normal mode or use a smaller image.`
+          : `Connection to ${analyzeUrl} dropped while reading analysis updates. ${message}`,
+      );
+    }
+
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });

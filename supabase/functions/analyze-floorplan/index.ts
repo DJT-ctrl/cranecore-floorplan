@@ -23,6 +23,7 @@ import type {
 const RATE_LIMIT_MAX = Number(Deno.env.get("RATE_LIMIT_MAX") ?? "10");
 const RATE_LIMIT_WINDOW_MS =
   Number(Deno.env.get("RATE_LIMIT_WINDOW_MINUTES") ?? "60") * 60 * 1000;
+const STREAM_HEARTBEAT_MS = 10_000;
 
 const kvPromise: Promise<Deno.Kv | null> = (async () => {
   try {
@@ -94,9 +95,22 @@ export async function handleRequest(request: Request): Promise<Response> {
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
   const writer = writable.getWriter();
   const encoder = new TextEncoder();
+  let writeQueue = Promise.resolve();
+
+  const writeChunk = (chunk: string): Promise<void> => {
+    const nextWrite = writeQueue.then(() =>
+      writer.write(encoder.encode(chunk))
+    );
+    writeQueue = nextWrite.catch(() => {});
+    return nextWrite;
+  };
 
   const emit = (data: object): Promise<void> =>
-    writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+    writeChunk(`data: ${JSON.stringify(data)}\n\n`);
+
+  const heartbeatId = setInterval(() => {
+    void writeChunk(": keep-alive\n\n").catch(() => {});
+  }, STREAM_HEARTBEAT_MS);
 
   (async () => {
     try {
@@ -107,6 +121,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         : "Unknown floor plan analysis error.";
       await emit({ type: "error", error: message }).catch(() => {});
     } finally {
+      clearInterval(heartbeatId);
       await writer.close().catch(() => {});
     }
   })();

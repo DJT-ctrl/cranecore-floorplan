@@ -20,8 +20,6 @@ import type {
   GeminiOpeningsResult,
 } from "./types.ts";
 
-const port = Number(Deno.env.get("FUNCTIONS_PORT") ?? "54321");
-
 const RATE_LIMIT_MAX = Number(Deno.env.get("RATE_LIMIT_MAX") ?? "10");
 const RATE_LIMIT_WINDOW_MS =
   Number(Deno.env.get("RATE_LIMIT_WINDOW_MINUTES") ?? "60") * 60 * 1000;
@@ -122,10 +120,6 @@ export async function handleRequest(request: Request): Promise<Response> {
       "Connection": "keep-alive",
     },
   });
-}
-
-if (import.meta.main) {
-  Deno.serve({ port }, handleRequest);
 }
 
 type AuthResult =

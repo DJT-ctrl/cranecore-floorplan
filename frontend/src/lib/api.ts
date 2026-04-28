@@ -51,12 +51,15 @@ export async function analyzeFloorPlanStream(
   }
 
   if (!response.ok || !response.body) {
-    const payload = await response.json().catch(() => ({})) as {
-      error?: string;
-    };
-    throw new Error(
-      payload.error ?? "The floor plan analysis request failed.",
-    );
+    const bodyText = await response.text().catch(() => "");
+    let errorMessage: string;
+    try {
+      const payload = JSON.parse(bodyText) as { error?: string };
+      errorMessage = payload.error ?? `Server returned ${response.status}`;
+    } catch {
+      errorMessage = `Server returned ${response.status}: ${bodyText.slice(0, 300)}`;
+    }
+    throw new Error(errorMessage);
   }
 
   const reader = response.body.getReader();

@@ -425,8 +425,7 @@ function parseMimeType(value: string): string | undefined {
 
 function buildCorsHeaders(request: Request): HeadersInit {
   const origin = request.headers.get("origin");
-  const configuredOrigin = Deno.env.get("CORS_ORIGIN") ??
-    "http://localhost:5173";
+  const configuredOrigin = Deno.env.get("CORS_ORIGIN") ?? "*";
   const allowOrigin =
     origin && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)
       ? origin

@@ -102,7 +102,9 @@ export async function analyzeFloorPlanStream(
 
       let event: ProgressEvent;
       try {
-        event = JSON.parse(raw) as ProgressEvent;
+        const parsed = JSON.parse(raw) as { type: string };
+        if (parsed.type === "heartbeat") continue;
+        event = parsed as unknown as ProgressEvent;
       } catch {
         continue;
       }

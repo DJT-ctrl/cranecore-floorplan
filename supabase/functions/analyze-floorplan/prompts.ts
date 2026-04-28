@@ -58,15 +58,15 @@ Return JSON only. Use the exact room ids from the geometry JSON. Give each room 
 
 export function openingsPrompt(
   geometry: GeminiGeometryResult,
-  classification: GeminiClassificationResult,
+  classification?: GeminiClassificationResult,
 ): string {
+  const classificationSection = classification
+    ? `\n\nClassification JSON:\n${JSON.stringify(classification)}`
+    : "";
   return `Agent step 3: detect all doors and windows in the same grayscale floor plan.
 
 Geometry JSON:
-${JSON.stringify(geometry)}
-
-Classification JSON:
-${JSON.stringify(classification)}
+${JSON.stringify(geometry)}${classificationSection}
 
 Return JSON only. Use pixel coordinates. Doors should be placed near swing arcs, breaks in walls, or doorway symbols. Windows should be placed along exterior wall openings. Reference room ids from the geometry JSON where possible.`;
 }

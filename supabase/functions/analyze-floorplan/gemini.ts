@@ -36,20 +36,13 @@ export async function generateJsonWithFallback<T>(
   let lastError: unknown;
 
   for (const model of models) {
-    for (
-      const prompt of [
-        request.prompt,
-        `${request.prompt}\n\nRetry instruction: return only valid JSON matching the schema. No markdown.`,
-      ]
-    ) {
-      try {
-        const data = await generateJson<T>({ ...request, model, prompt });
-        return { data, model };
-      } catch (error) {
-        lastError = error;
-        if (error instanceof GeminiHttpError && isModelUnavailable(error)) {
-          break;
-        }
+    try {
+      const data = await generateJson<T>({ ...request, model });
+      return { data, model };
+    } catch (error) {
+      lastError = error;
+      if (!(error instanceof GeminiHttpError && isModelUnavailable(error))) {
+        break;
       }
     }
   }
@@ -65,7 +58,7 @@ export async function generateAnnotatedImage(
   const response = await postGenerateContent({
     apiKey: request.apiKey,
     model: request.model,
-    timeoutMs: request.timeoutMs ?? 28_000,
+    timeoutMs: request.timeoutMs ?? 20_000,
     body: {
       contents: [{
         role: "user",
@@ -111,7 +104,7 @@ async function generateJson<T>(request: JsonRequest<T>): Promise<T> {
   const response = await postGenerateContent({
     apiKey: request.apiKey,
     model: request.model,
-    timeoutMs: request.timeoutMs ?? 18_000,
+    timeoutMs: request.timeoutMs ?? 12_000,
     body: {
       contents: [{
         role: "user",

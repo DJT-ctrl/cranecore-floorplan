@@ -21,7 +21,7 @@ import type {
 } from "./types.ts";
 
 const STREAM_HEARTBEAT_MS = 8_000;
-const ANALYSIS_TIMEOUT_MS = 35_000;
+const ANALYSIS_TIMEOUT_MS = 28_000;
 
 export async function handleRequest(request: Request): Promise<Response> {
   const corsHeaders = buildCorsHeaders(request);
@@ -76,7 +76,7 @@ export async function handleRequest(request: Request): Promise<Response> {
     writeChunk(`data: ${JSON.stringify(data)}\n\n`);
 
   const heartbeatId = setInterval(() => {
-    void writeChunk(": keep-alive\n\n").catch(() => {});
+    void writeChunk('data: {"type":"heartbeat"}\n\n').catch(() => {});
   }, STREAM_HEARTBEAT_MS);
 
   let analysisFinished = false;
@@ -118,6 +118,7 @@ export async function handleRequest(request: Request): Promise<Response> {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
     },
   });
 }
@@ -195,39 +196,35 @@ async function runAnalysis(
   });
   await emit({ type: "step_done", step: "geometry", progress: 28 });
 
-  await emit({
-    type: "step_start",
-    step: "classification",
-    label: "Classifying room types",
-    progress: 30,
-  });
-  const classificationResult = await generateJsonWithFallback<
-    GeminiClassificationResult
-  >({
-    apiKey,
-    model: geometryResult.model,
-    fallbackModel,
-    prompt: classificationPrompt(geometryResult.data),
-    image,
-    responseSchema: classificationSchema,
-  });
-  await emit({ type: "step_done", step: "classification", progress: 52 });
+  // Run classification and openings in parallel to stay within Netlify's 30s limit.
+  await Promise.all([
+    emit({ type: "step_start", step: "classification", label: "Classifying room types", progress: 30 }),
+    emit({ type: "step_start", step: "openings", label: "Detecting doors & windows", progress: 32 }),
+  ]);
 
-  await emit({
-    type: "step_start",
-    step: "openings",
-    label: "Detecting doors & windows",
-    progress: 55,
-  });
-  const openingsResult = await generateJsonWithFallback<GeminiOpeningsResult>({
-    apiKey,
-    model: classificationResult.model,
-    fallbackModel,
-    prompt: openingsPrompt(geometryResult.data, classificationResult.data),
-    image,
-    responseSchema: openingsSchema,
-  });
-  await emit({ type: "step_done", step: "openings", progress: 72 });
+  const [classificationResult, openingsResult] = await Promise.all([
+    generateJsonWithFallback<GeminiClassificationResult>({
+      apiKey,
+      model: geometryResult.model,
+      fallbackModel,
+      prompt: classificationPrompt(geometryResult.data),
+      image,
+      responseSchema: classificationSchema,
+    }),
+    generateJsonWithFallback<GeminiOpeningsResult>({
+      apiKey,
+      model: geometryResult.model,
+      fallbackModel,
+      prompt: openingsPrompt(geometryResult.data),
+      image,
+      responseSchema: openingsSchema,
+    }),
+  ]);
+
+  await Promise.all([
+    emit({ type: "step_done", step: "classification", progress: 60 }),
+    emit({ type: "step_done", step: "openings", progress: 72 }),
+  ]);
 
   const normalized = normalizeAnalysis(
     request,

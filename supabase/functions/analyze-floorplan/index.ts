@@ -35,7 +35,7 @@ const kvPromise: Promise<Deno.Kv | null> = (async () => {
 })();
 const memoryRateStore = new Map<string, number[]>();
 
-Deno.serve({ port }, async (request) => {
+export async function handleRequest(request: Request): Promise<Response> {
   const corsHeaders = buildCorsHeaders(request);
 
   if (request.method === "OPTIONS") {
@@ -122,7 +122,11 @@ Deno.serve({ port }, async (request) => {
       "Connection": "keep-alive",
     },
   });
-});
+}
+
+if (import.meta.main) {
+  Deno.serve({ port }, handleRequest);
+}
 
 type AuthResult =
   | { ok: true; identity: string; via: "apiKey" | "ip" }

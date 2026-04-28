@@ -7,7 +7,7 @@ import type {
 
 const analyzeUrl =
   import.meta.env.VITE_ANALYZE_FUNCTION_URL ??
-  "http://localhost:54321/functions/v1/analyze-floorplan";
+  "/functions/v1/analyze-floorplan";
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 export interface AnalyzeOptions {
@@ -43,8 +43,10 @@ export async function analyzeFloorPlanStream(
   } catch {
     throw new Error(
       `Cannot reach the analysis server at ${analyzeUrl}. ` +
-        `Start it with: deno run --allow-net --allow-env --env-file=./supabase/.env ` +
-        `supabase/functions/analyze-floorplan/index.ts`,
+        (analyzeUrl.startsWith("http://localhost")
+          ? `Start it with: deno run --allow-net --allow-env --env-file=./supabase/.env ` +
+            `supabase/functions/analyze-floorplan/index.ts`
+          : `Please try again or contact support.`),
     );
   }
 

@@ -3,6 +3,10 @@
   command = "npm run build"
   publish = "dist"
 
+[[edge_functions]]
+  path     = "/functions/v1/analyze-floorplan"
+  function = "analyze-floorplan"
+
 [[redirects]]
   from   = "/*"
   to     = "/index.html"
